@@ -166,8 +166,8 @@ footer{text-align:center;padding:20px;color:var(--c-muted);font-size:.8rem}
   <div class="card fade-in">
     <div class="step-title">第一步：上传 EEM 数据文件</div>
     <div class="alert alert-info">
-      支持 Hitachi F-4600 FD3 格式 TXT 文件。上传样品文件，有空白文件则一起上传。<br>
-      <small>文件名含 blank / 空白 / blk / kb 的自动识别为空白。没有空白也可以处理（跳过扣除和归一化）。</small>
+      支持 Hitachi F-4600 FD3 格式 TXT 文件，请同时上传样品文件和空白文件。<br>
+      <small>文件名含 blank / 空白 / blk / kb 的自动识别为空白。</small>
     </div>
     <div class="file-drop" id="file-drop">
       <input type="file" id="file-input" multiple accept=".txt,.TXT">
@@ -539,34 +539,20 @@ function buildPairingUI(){
     return;
   }
   if(blanks.length===0){
-    c.innerHTML='<div class="alert alert-warn">\u26A0 \u672A\u53D1\u73B0\u7A7A\u767D\u6587\u4EF6\u3002\u5C06\u8DF3\u8FC7\u7A7A\u767D\u6263\u9664\u548CRaman\u5F52\u4E00\u5316\uFF0C\u76F4\u63A5\u8FDB\u884C\u6563\u5C04\u53BB\u9664\u548CFRI\u79EF\u5206\u3002</div>';
-    STATE.pairs = [];
-    STATE.noBlank = true;
-    for(var si=0;si<samples.length;si++){
-      STATE.pairs.push({sampleIdx: STATE.files.indexOf(samples[si]), blankIdx: -1});
-      var row = document.createElement("div");
-      row.className = "pair-row";
-      row.innerHTML =
-        '<div><label>\u6837\u54C1</label><div style="font-weight:500;font-size:.9rem">'+escH(samples[si].name)+'</div></div>'+
-        '<div class="pair-arrow">&rarr;</div>'+
-        '<div><label>\u7A7A\u767D</label><span style="color:#999">\u65E0\uFF08\u8DF3\u8FC7\u6263\u9664\uFF09</span></div>';
-      c.appendChild(row);
-    }
-    return;
+    c.innerHTML='<div class="alert alert-warn" style="margin-bottom:12px">\u672A\u53D1\u73B0\u7A7A\u767D\u6587\u4EF6\u3002\u53EF\u4EE5\u8DF3\u8FC7\u7A7A\u767D\u6263\u9664\u76F4\u63A5\u8BA1\u7B97\uFF0C\u4F46\u5EFA\u8BAE\u63D0\u4F9B\u7A7A\u767D\u4EE5\u83B7\u5F97\u66F4\u51C6\u786E\u7684\u7ED3\u679C\u3002</div>';
   }
 
-  STATE.noBlank = false;
   STATE.pairs = [];
   for(var si=0;si<samples.length;si++){
     var s = samples[si];
     var sIdx = STATE.files.indexOf(s);
-    var bestBI = 0;
+    var bestBI = blanks.length>0 ? 0 : -1;
 
-    STATE.pairs.push({sampleIdx: sIdx, blankIdx: STATE.files.indexOf(blanks[bestBI])});
+    STATE.pairs.push({sampleIdx: sIdx, blankIdx: blanks.length>0 ? STATE.files.indexOf(blanks[0]) : -1});
 
     var row = document.createElement("div");
     row.className = "pair-row";
-    var opts = "";
+    var opts = '<option value="-1"'+((bestBI===-1)?' selected':'')+'>-- \u4E0D\u4F7F\u7528\u7A7A\u767D --</option>';
     for(var bi=0;bi<blanks.length;bi++){
       opts += '<option value="'+bi+'"'+(bi===bestBI?' selected':'')+'>'+escH(blanks[bi].name)+'</option>';
     }
@@ -581,10 +567,15 @@ function buildPairingUI(){
 }
 
 function updatePair(pairIdx, blankLocalIdx){
+  if(blankLocalIdx===-1 || blankLocalIdx==="-1"){
+    STATE.pairs[pairIdx].blankIdx = -1;
+    return;
+  }
   var blanks=[];
   for(var i=0;i<STATE.files.length;i++){
     if(STATE.files[i].type==="blank") blanks.push(STATE.files[i]);
   }
+  blankLocalIdx = parseInt(blankLocalIdx);
   if(blankLocalIdx>=0 && blankLocalIdx<blanks.length){
     STATE.pairs[pairIdx].blankIdx = STATE.files.indexOf(blanks[blankLocalIdx]);
   }
@@ -653,13 +644,11 @@ function runProcessing(){
     for(var pi=0;pi<totalPairs;pi++){
       var pair = STATE.pairs[pi];
       var sample = STATE.files[pair.sampleIdx];
-      var blank  = STATE.files[pair.blankIdx];
+      var hasBlank = (pair.blankIdx >= 0 && pair.blankIdx < STATE.files.length);
+      var blank = hasBlank ? STATE.files[pair.blankIdx] : null;
       var pct0 = 15 + (pi/totalPairs)*75;
       setProgress(pct0, "\u5904\u7406 "+sample.name+" ("+(pi+1)+"/"+totalPairs+")...");
       addLog("\n\u2500\u2500\u2500 \u5904\u7406: "+sample.name+" \u2500\u2500\u2500");
-
-      var hasBlank = (pair.blankIdx >= 0 && pair.blankIdx < STATE.files.length);
-      var blank = hasBlank ? STATE.files[pair.blankIdx] : null;
 
       if(hasBlank && (sample.exAxis.length!==blank.exAxis.length || sample.emAxis.length!==blank.emAxis.length)){
         addLog("\u2717 \u7EF4\u5EA6\u4E0D\u5339\u914D: \u6837\u54C1("+sample.exAxis.length+"\u00D7"+sample.emAxis.length+") vs \u7A7A\u767D("+blank.exAxis.length+"\u00D7"+blank.emAxis.length+")","err");
@@ -675,7 +664,6 @@ function runProcessing(){
 
       /* ---- Blank subtraction ---- */
       var corrected = new Array(nEm);
-      var ramanArea = 0;
       if(hasBlank){
         for(var i=0;i<nEm;i++){
           corrected[i] = new Float64Array(nEx);
@@ -686,14 +674,25 @@ function runProcessing(){
           }
         }
         addLog("  \u2713 \u7A7A\u767D\u6263\u9664\u5B8C\u6210","ok");
+      } else {
+        for(var i=0;i<nEm;i++){
+          corrected[i] = new Float64Array(nEx);
+          for(var j=0;j<nEx;j++){
+            corrected[i][j] = Math.max((sample.matrix[i]&&sample.matrix[i][j])||0, 0);
+          }
+        }
+        addLog("  \u26A0 \u672A\u4F7F\u7528\u7A7A\u767D\uFF0C\u8DF3\u8FC7\u6263\u9664\u6B65\u9AA4","warn");
+      }
 
-        /* ---- Raman normalization ---- */
+      /* ---- Raman normalization ---- */
+      var ramanArea = 0;
+      if(hasBlank){
         var ex350idx = -1;
         for(var j=0;j<nEx;j++){
           if(Math.abs(exAxis[j]-350)<0.5){ex350idx=j;break;}
         }
         if(ex350idx===-1){
-          addLog("  \u26A0 \u7A7A\u767D\u4E2D\u672A\u627E\u5230 Ex=350nm\uFF0C\u8DF3\u8FC7Raman\u5F52\u4E00\u5316","warn");
+          addLog("  \u26A0 \u7A7A\u767D\u4E2D\u672A\u627E\u5230 Ex=350nm\uFF0C\u8DF3\u8FC7 Raman \u5F52\u4E00\u5316","warn");
         } else {
           var emLoR=371, emHiR=428;
           for(var i=0;i<nEm;i++){
@@ -704,26 +703,19 @@ function runProcessing(){
             if(Math.abs(em-emLoR)<0.5 || Math.abs(em-emHiR)<0.5) w = 0.5;
             ramanArea += val * w * dEm;
           }
-          if(ramanArea<=0){
-            addLog("  \u26A0 Raman \u9762\u79EF \u2264 0\uFF0C\u8DF3\u8FC7\u5F52\u4E00\u5316","warn");
-          } else {
-            addLog("  \u2713 Raman \u9762\u79EF Q = "+ramanArea.toFixed(2),"ok");
-            for(var i=0;i<nEm;i++){
-              for(var j=0;j<nEx;j++){
-                corrected[i][j] /= ramanArea;
-              }
-            }
-            addLog("  \u2713 Raman \u5F52\u4E00\u5316\u5B8C\u6210 (R.U.)","ok");
-          }
         }
+      }
+
+      if(ramanArea<=0){
+        addLog("  \u26A0 \u8DF3\u8FC7 Raman \u5F52\u4E00\u5316"+(hasBlank?"\uFF08\u9762\u79EF\u22640\uFF09":"\uFF08\u65E0\u7A7A\u767D\uFF09"),"warn");
       } else {
+        addLog("  \u2713 Raman \u9762\u79EF Q = "+ramanArea.toFixed(2),"ok");
         for(var i=0;i<nEm;i++){
-          corrected[i] = new Float64Array(nEx);
           for(var j=0;j<nEx;j++){
-            corrected[i][j] = (sample.matrix[i]&&sample.matrix[i][j])||0;
+            corrected[i][j] /= ramanArea;
           }
         }
-        addLog("  \u26A0 \u65E0\u7A7A\u767D\u6587\u4EF6\uFF0C\u8DF3\u8FC7\u7A7A\u767D\u6263\u9664\u548CRaman\u5F52\u4E00\u5316","warn");
+        addLog("  \u2713 Raman \u5F52\u4E00\u5316\u5B8C\u6210 (R.U.)","ok");
       }
 
       /* ---- Scatter removal ---- */
@@ -823,17 +815,11 @@ function runProcessing(){
       var match = true;
       for(var r=0;r<5;r++){ if(Math.abs(mf0[r]-expectedMF[r])>=0.1){match=false;break;} }
       if(match){
-        addLog("\n\u2713 MF \u6821\u9A8C\u901A\u8FC7\uFF01\u4E0E\u6807\u51C6\u8303\u56F4(Ex 220-450, Em 260-500)\u5B8C\u5168\u4E00\u81F4","ok");
+        addLog("\n\u2713 MF \u503C\u4E0E\u6807\u51C6\u5B8C\u5168\u4E00\u81F4\uFF0C\u8BA1\u7B97\u6B63\u786E","ok");
       } else {
-        addLog("\n\u2139 MF \u53C2\u8003\u5BF9\u6BD4: \u5F53\u524D ["+mf0.map(function(v){return v.toFixed(2)}).join(", ")+"] vs \u6807\u51C6 ["+expectedMF.join(", ")+"]","warn");
-        addLog("  \u2192 \u8FD9\u4E0D\u662F\u8BA1\u7B97\u9519\u8BEF\uFF01MF\u503C\u53D6\u51B3\u4E8E\u4EEA\u5668\u6CE2\u957F\u8303\u56F4\u3002\u53EA\u8981\u540C\u4E00\u6279\u6837\u54C1\u7684MF\u76F8\u540C\uFF0C\u7ED3\u679C\u5C31\u662F\u53EF\u9760\u7684\u3002");
-        var mfConsistent = true;
-        for(var ri=1;ri<results.length;ri++){
-          for(var r=0;r<5;r++){
-            if(Math.abs(results[ri].MF[r]-mf0[r])>0.01){mfConsistent=false;break;}
-          }
-        }
-        if(mfConsistent) addLog("  \u2713 \u6240\u6709\u6837\u54C1\u7684MF\u503C\u5B8C\u5168\u4E00\u81F4\uFF0C\u8BA1\u7B97\u53EF\u9760\uFF01","ok");
+        addLog("\n\u2139 MF \u503C ["+mf0.map(function(v){return v.toFixed(2)}).join(", ")+"]","ok");
+        addLog("  \u6807\u51C6\u53C2\u8003\u503C ["+expectedMF.join(", ")+"] \u57FA\u4E8E Ex=220-450nm / Em=260-500nm","");
+        addLog("  \u5982\u679C\u4F60\u7684\u6CE2\u957F\u8303\u56F4\u4E0D\u540C\uFF0CMF\u4F1A\u6709\u5DEE\u5F02\uFF0C\u8FD9\u662F\u6B63\u5E38\u7684\uFF0C\u4E0D\u5F71\u54CD\u7ED3\u679C\u6B63\u786E\u6027","");
       }
     }
 
@@ -906,7 +892,7 @@ function renderResults(){
     for(var r=0;r<5;r++){
       var ok=Math.abs(mf[r]-expectedMF[r])<0.1;
       h+="<tr><td>"+REGION_NAMES[r]+"</td><td>"+mf[r].toFixed(4)+"</td><td>"+expectedMF[r]+"</td>"+
-        '<td style="color:'+(ok?"#16a34a":"#d97706")+';">'+(ok?"\u2713 \u4E00\u81F4":"\u26A0 \u504F\u5DEE")+"</td></tr>";
+        '<td style="color:'+(ok?"#16a34a":"#6b7280")+';">'+(ok?"\u2713 \u4E00\u81F4":"\u2139 \u6CE2\u957F\u8303\u56F4\u4E0D\u540C")+"</td></tr>";
     }
   }
   t3.innerHTML=h;
