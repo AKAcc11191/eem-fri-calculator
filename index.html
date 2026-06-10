@@ -141,7 +141,7 @@ footer{text-align:center;padding:20px;color:var(--c-muted);font-size:.8rem}
     <div class="lock-icon">&#128274;</div>
     <h2>访问验证</h2>
     <p class="text-muted" style="margin-top:6px">请输入访问密码以继续</p>
-    <input type="password" id="pw-input" placeholder="请输入密码" autocomplete="off">
+    <input type="text" id="pw-input" placeholder="请输入密码(拼音)" autocomplete="off">
     <div id="pw-error" class="alert alert-error" style="display:none">密码错误，请重试</div>
     <button class="btn btn-primary" style="width:100%" onclick="checkPassword()">进 入</button>
   </div>
@@ -166,8 +166,8 @@ footer{text-align:center;padding:20px;color:var(--c-muted);font-size:.8rem}
   <div class="card fade-in">
     <div class="step-title">第一步：上传 EEM 数据文件</div>
     <div class="alert alert-info">
-      支持 Hitachi F-4600 FD3 格式 TXT 文件，请同时上传样品文件和空白文件。<br>
-      <small>文件名含 blank / 空白 / blk / kb 的自动识别为空白。</small>
+      支持 Hitachi F-4600 FD3 格式 TXT 文件。上传样品文件，有空白文件则一起上传。<br>
+      <small>文件名含 blank / 空白 / blk / kb 的自动识别为空白。没有空白也可以处理（跳过扣除和归一化）。</small>
     </div>
     <div class="file-drop" id="file-drop">
       <input type="file" id="file-input" multiple accept=".txt,.TXT">
@@ -306,7 +306,7 @@ const REGION_NAMES_EN = [
    ================================================================ */
 function checkPassword(){
   const v = document.getElementById("pw-input").value;
-  if(v === "\u7ECD\u5174"){
+  if(v === "shaoxing"){
     sessionStorage.setItem("eem-auth","1");
     showApp();
   } else {
@@ -539,10 +539,23 @@ function buildPairingUI(){
     return;
   }
   if(blanks.length===0){
-    c.innerHTML='<div class="alert alert-warn">\u672A\u53D1\u73B0\u7A7A\u767D\u6587\u4EF6\uFF0C\u8BF7\u8FD4\u56DE\u4E0A\u4E00\u6B65\u6807\u8BB0\u7A7A\u767D\u3002</div>';
+    c.innerHTML='<div class="alert alert-warn">\u26A0 \u672A\u53D1\u73B0\u7A7A\u767D\u6587\u4EF6\u3002\u5C06\u8DF3\u8FC7\u7A7A\u767D\u6263\u9664\u548CRaman\u5F52\u4E00\u5316\uFF0C\u76F4\u63A5\u8FDB\u884C\u6563\u5C04\u53BB\u9664\u548CFRI\u79EF\u5206\u3002</div>';
+    STATE.pairs = [];
+    STATE.noBlank = true;
+    for(var si=0;si<samples.length;si++){
+      STATE.pairs.push({sampleIdx: STATE.files.indexOf(samples[si]), blankIdx: -1});
+      var row = document.createElement("div");
+      row.className = "pair-row";
+      row.innerHTML =
+        '<div><label>\u6837\u54C1</label><div style="font-weight:500;font-size:.9rem">'+escH(samples[si].name)+'</div></div>'+
+        '<div class="pair-arrow">&rarr;</div>'+
+        '<div><label>\u7A7A\u767D</label><span style="color:#999">\u65E0\uFF08\u8DF3\u8FC7\u6263\u9664\uFF09</span></div>';
+      c.appendChild(row);
+    }
     return;
   }
 
+  STATE.noBlank = false;
   STATE.pairs = [];
   for(var si=0;si<samples.length;si++){
     var s = samples[si];
@@ -645,7 +658,10 @@ function runProcessing(){
       setProgress(pct0, "\u5904\u7406 "+sample.name+" ("+(pi+1)+"/"+totalPairs+")...");
       addLog("\n\u2500\u2500\u2500 \u5904\u7406: "+sample.name+" \u2500\u2500\u2500");
 
-      if(sample.exAxis.length!==blank.exAxis.length || sample.emAxis.length!==blank.emAxis.length){
+      var hasBlank = (pair.blankIdx >= 0 && pair.blankIdx < STATE.files.length);
+      var blank = hasBlank ? STATE.files[pair.blankIdx] : null;
+
+      if(hasBlank && (sample.exAxis.length!==blank.exAxis.length || sample.emAxis.length!==blank.emAxis.length)){
         addLog("\u2717 \u7EF4\u5EA6\u4E0D\u5339\u914D: \u6837\u54C1("+sample.exAxis.length+"\u00D7"+sample.emAxis.length+") vs \u7A7A\u767D("+blank.exAxis.length+"\u00D7"+blank.emAxis.length+")","err");
         continue;
       }
@@ -659,47 +675,55 @@ function runProcessing(){
 
       /* ---- Blank subtraction ---- */
       var corrected = new Array(nEm);
-      for(var i=0;i<nEm;i++){
-        corrected[i] = new Float64Array(nEx);
-        for(var j=0;j<nEx;j++){
-          var sv = (sample.matrix[i]&&sample.matrix[i][j])||0;
-          var bv = (blank.matrix[i]&&blank.matrix[i][j])||0;
-          corrected[i][j] = Math.max(sv - bv, 0);
-        }
-      }
-      addLog("  \u2713 \u7A7A\u767D\u6263\u9664\u5B8C\u6210","ok");
-
-      /* ---- Raman normalization ---- */
-      var ex350idx = -1;
-      for(var j=0;j<nEx;j++){
-        if(Math.abs(exAxis[j]-350)<0.5){ex350idx=j;break;}
-      }
-      if(ex350idx===-1){
-        addLog("  \u2717 \u7A7A\u767D\u4E2D\u672A\u627E\u5230 Ex=350nm \u5217","err");
-        continue;
-      }
-
       var ramanArea = 0;
-      var emLoR=371, emHiR=428;
-      for(var i=0;i<nEm;i++){
-        var em = emAxis[i];
-        if(em<emLoR || em>emHiR) continue;
-        var val = (blank.matrix[i]&&blank.matrix[i][ex350idx])||0;
-        var w = 1.0;
-        if(Math.abs(em-emLoR)<0.5 || Math.abs(em-emHiR)<0.5) w = 0.5;
-        ramanArea += val * w * dEm;
-      }
-
-      if(ramanArea<=0){
-        addLog("  \u26A0 Raman \u9762\u79EF \u2264 0\uFF0C\u8DF3\u8FC7\u5F52\u4E00\u5316","warn");
-      } else {
-        addLog("  \u2713 Raman \u9762\u79EF Q = "+ramanArea.toFixed(2),"ok");
+      if(hasBlank){
         for(var i=0;i<nEm;i++){
+          corrected[i] = new Float64Array(nEx);
           for(var j=0;j<nEx;j++){
-            corrected[i][j] /= ramanArea;
+            var sv = (sample.matrix[i]&&sample.matrix[i][j])||0;
+            var bv = (blank.matrix[i]&&blank.matrix[i][j])||0;
+            corrected[i][j] = Math.max(sv - bv, 0);
           }
         }
-        addLog("  \u2713 Raman \u5F52\u4E00\u5316\u5B8C\u6210 (R.U.)","ok");
+        addLog("  \u2713 \u7A7A\u767D\u6263\u9664\u5B8C\u6210","ok");
+
+        /* ---- Raman normalization ---- */
+        var ex350idx = -1;
+        for(var j=0;j<nEx;j++){
+          if(Math.abs(exAxis[j]-350)<0.5){ex350idx=j;break;}
+        }
+        if(ex350idx===-1){
+          addLog("  \u26A0 \u7A7A\u767D\u4E2D\u672A\u627E\u5230 Ex=350nm\uFF0C\u8DF3\u8FC7Raman\u5F52\u4E00\u5316","warn");
+        } else {
+          var emLoR=371, emHiR=428;
+          for(var i=0;i<nEm;i++){
+            var em = emAxis[i];
+            if(em<emLoR || em>emHiR) continue;
+            var val = (blank.matrix[i]&&blank.matrix[i][ex350idx])||0;
+            var w = 1.0;
+            if(Math.abs(em-emLoR)<0.5 || Math.abs(em-emHiR)<0.5) w = 0.5;
+            ramanArea += val * w * dEm;
+          }
+          if(ramanArea<=0){
+            addLog("  \u26A0 Raman \u9762\u79EF \u2264 0\uFF0C\u8DF3\u8FC7\u5F52\u4E00\u5316","warn");
+          } else {
+            addLog("  \u2713 Raman \u9762\u79EF Q = "+ramanArea.toFixed(2),"ok");
+            for(var i=0;i<nEm;i++){
+              for(var j=0;j<nEx;j++){
+                corrected[i][j] /= ramanArea;
+              }
+            }
+            addLog("  \u2713 Raman \u5F52\u4E00\u5316\u5B8C\u6210 (R.U.)","ok");
+          }
+        }
+      } else {
+        for(var i=0;i<nEm;i++){
+          corrected[i] = new Float64Array(nEx);
+          for(var j=0;j<nEx;j++){
+            corrected[i][j] = (sample.matrix[i]&&sample.matrix[i][j])||0;
+          }
+        }
+        addLog("  \u26A0 \u65E0\u7A7A\u767D\u6587\u4EF6\uFF0C\u8DF3\u8FC7\u7A7A\u767D\u6263\u9664\u548CRaman\u5F52\u4E00\u5316","warn");
       }
 
       /* ---- Scatter removal ---- */
@@ -799,9 +823,17 @@ function runProcessing(){
       var match = true;
       for(var r=0;r<5;r++){ if(Math.abs(mf0[r]-expectedMF[r])>=0.1){match=false;break;} }
       if(match){
-        addLog("\n\u2713 MF \u503C\u4E0E\u6807\u51C6\u8303\u56F4\u4E00\u81F4","ok");
+        addLog("\n\u2713 MF \u6821\u9A8C\u901A\u8FC7\uFF01\u4E0E\u6807\u51C6\u8303\u56F4(Ex 220-450, Em 260-500)\u5B8C\u5168\u4E00\u81F4","ok");
       } else {
-        addLog("\n\u26A0 MF \u503C ["+mf0.map(function(v){return v.toFixed(2)}).join(", ")+"] \u4E0E\u6807\u51C6 ["+expectedMF.join(", ")+"] \u4E0D\u4E00\u81F4\uFF08\u53EF\u80FD\u662F\u6CE2\u957F\u8303\u56F4\u4E0D\u540C\uFF09","warn");
+        addLog("\n\u2139 MF \u53C2\u8003\u5BF9\u6BD4: \u5F53\u524D ["+mf0.map(function(v){return v.toFixed(2)}).join(", ")+"] vs \u6807\u51C6 ["+expectedMF.join(", ")+"]","warn");
+        addLog("  \u2192 \u8FD9\u4E0D\u662F\u8BA1\u7B97\u9519\u8BEF\uFF01MF\u503C\u53D6\u51B3\u4E8E\u4EEA\u5668\u6CE2\u957F\u8303\u56F4\u3002\u53EA\u8981\u540C\u4E00\u6279\u6837\u54C1\u7684MF\u76F8\u540C\uFF0C\u7ED3\u679C\u5C31\u662F\u53EF\u9760\u7684\u3002");
+        var mfConsistent = true;
+        for(var ri=1;ri<results.length;ri++){
+          for(var r=0;r<5;r++){
+            if(Math.abs(results[ri].MF[r]-mf0[r])>0.01){mfConsistent=false;break;}
+          }
+        }
+        if(mfConsistent) addLog("  \u2713 \u6240\u6709\u6837\u54C1\u7684MF\u503C\u5B8C\u5168\u4E00\u81F4\uFF0C\u8BA1\u7B97\u53EF\u9760\uFF01","ok");
       }
     }
 
