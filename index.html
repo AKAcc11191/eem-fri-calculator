@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EEM-FRI 荧光数据处理工具</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --c-bg:#f4f6f9;--c-surface:#fff;--c-primary:#2563eb;--c-primary-h:#1d4ed8;
+  --c-accent:#10b981;--c-danger:#ef4444;--c-text:#1e293b;--c-muted:#64748b;
+  --c-border:#e2e8f0;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --shadow-lg:0 10px 25px rgba(0,0,0,.1);--radius:10px;--radius-sm:6px;
+}
+html{font-size:15px;scroll-behavior:smooth}
+body{font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  background:var(--c-bg);color:var(--c-text);line-height:1.6;min-height:100vh}
+a{color:var(--c-primary);text-decoration:none}
+h1,h2,h3{font-weight:700;line-height:1.3}
+
+.container{max-width:1020px;margin:0 auto;padding:24px 20px}
+.card{background:var(--c-surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px 32px;margin-bottom:20px}
+
+header{background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);color:#fff;padding:28px 0;text-align:center;box-shadow:0 4px 12px rgba(37,99,235,.25)}
+header h1{font-size:1.6rem;letter-spacing:.5px}
+header p{opacity:.85;font-size:.9rem;margin-top:4px}
+
+.stepper{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:24px 0 8px}
+.step-dot{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:.82rem;font-weight:600;background:var(--c-border);color:var(--c-muted);transition:.2s;cursor:default}
+.step-dot.active{background:var(--c-primary);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.35)}
+.step-dot.done{background:var(--c-accent);color:#fff}
+.step-labels{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:.72rem;color:var(--c-muted)}
+.step-labels span{width:36px;text-align:center}
+
+.step-title{text-align:center;font-size:1.15rem;font-weight:700;margin-bottom:20px;color:var(--c-primary)}
+
+.section{display:none}
+.section.active{display:block}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 22px;
+  border:none;border-radius:var(--radius-sm);font-size:.92rem;font-weight:600;cursor:pointer;
+  transition:background .15s,transform .1s,box-shadow .15s;user-select:none}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--c-primary);color:#fff}.btn-primary:hover{background:var(--c-primary-h)}
+.btn-accent{background:var(--c-accent);color:#fff}.btn-accent:hover{background:#059669}
+.btn-danger{background:var(--c-danger);color:#fff}.btn-danger:hover{background:#dc2626}
+.btn-outline{background:transparent;border:1.5px solid var(--c-border);color:var(--c-text)}.btn-outline:hover{border-color:var(--c-primary);color:var(--c-primary)}
+.btn-sm{padding:6px 14px;font-size:.82rem}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
+input[type="text"],input[type="password"],input[type="number"],select{
+  padding:9px 14px;border:1.5px solid var(--c-border);border-radius:var(--radius-sm);
+  font-size:.92rem;width:100%;transition:border-color .15s;background:#fff;color:var(--c-text)}
+input:focus,select:focus{outline:none;border-color:var(--c-primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+
+label{font-weight:600;font-size:.88rem;margin-bottom:4px;display:block;color:var(--c-muted)}
+
+.file-drop{border:2px dashed var(--c-border);border-radius:var(--radius);padding:40px 20px;
+  text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative}
+.file-drop:hover,.file-drop.dragover{border-color:var(--c-primary);background:rgba(37,99,235,.04)}
+.file-drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.file-drop .icon{font-size:2.4rem;margin-bottom:8px}
+.file-drop p{color:var(--c-muted);font-size:.9rem}
+
+.file-list{margin-top:14px}
+.file-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--radius-sm);
+  background:#f8fafc;margin-bottom:6px;font-size:.88rem}
+.file-item .name{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-item .badge{padding:2px 8px;border-radius:12px;font-size:.75rem;font-weight:600}
+.badge-sample{background:#dbeafe;color:#2563eb}.badge-blank{background:#fef3c7;color:#d97706}
+.file-item .remove{cursor:pointer;color:var(--c-danger);font-weight:700;font-size:1.1rem;line-height:1;padding:0 4px}
+.file-item .remove:hover{opacity:.7}
+
+.pair-row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin-bottom:10px;
+  padding:10px 14px;background:#f8fafc;border-radius:var(--radius-sm)}
+.pair-arrow{color:var(--c-muted);font-size:1.2rem}
+
+.param-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:600px){.param-grid{grid-template-columns:1fr}.pair-row{grid-template-columns:1fr}}
+
+.result-table-wrap{overflow-x:auto;margin-top:14px;border:1px solid var(--c-border);border-radius:var(--radius-sm)}
+.result-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.result-table th,.result-table td{padding:8px 10px;border:1px solid var(--c-border);text-align:center;white-space:nowrap}
+.result-table th{background:#f1f5f9;font-weight:600;position:sticky;top:0}
+.result-table tr:nth-child(even){background:#fafbfc}
+.result-table td:first-child{text-align:left;font-weight:500}
+
+.alert{padding:12px 16px;border-radius:var(--radius-sm);font-size:.88rem;margin-bottom:12px}
+.alert-info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+.alert-warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+.alert-error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.alert-ok{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+
+.progress-bar{height:6px;background:var(--c-border);border-radius:3px;overflow:hidden;margin:14px 0}
+.progress-bar .fill{height:100%;background:var(--c-primary);border-radius:3px;transition:width .3s}
+
+.log-box{max-height:220px;overflow-y:auto;background:#1e293b;color:#e2e8f0;border-radius:var(--radius-sm);
+  padding:12px 14px;font-family:"Cascadia Code","Fira Code",Consolas,monospace;font-size:.78rem;line-height:1.7;margin-top:10px}
+.log-box .ok{color:#4ade80}.log-box .warn{color:#fbbf24}.log-box .err{color:#f87171}
+
+.eem-preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px}
+.eem-card{background:#f8fafc;border-radius:var(--radius-sm);padding:10px;text-align:center}
+.eem-card canvas{width:100%;border-radius:4px}
+.eem-card .eem-label{font-size:.8rem;font-weight:600;margin-top:6px;color:var(--c-text)}
+
+.fade-in{animation:fadeIn .35s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.password-wrap{max-width:380px;margin:80px auto;text-align:center}
+.password-wrap .lock-icon{font-size:3rem;margin-bottom:12px}
+.password-wrap input{text-align:center;font-size:1.05rem;margin:14px 0}
+
+.flex-between{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.mt-2{margin-top:12px}.mt-3{margin-top:18px}.mb-2{margin-bottom:12px}
+.text-center{text-align:center}.text-muted{color:var(--c-muted)}
+
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--c-border);margin-bottom:16px}
+.tab{padding:8px 16px;font-size:.88rem;font-weight:600;cursor:pointer;border:none;background:none;
+  color:var(--c-muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s}
+.tab.active{color:var(--c-primary);border-bottom-color:var(--c-primary)}
+.tab:hover{color:var(--c-text)}
+.tab-content{display:none}.tab-content.active{display:block}
+
+footer{text-align:center;padding:20px;color:var(--c-muted);font-size:.8rem}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>EEM-FRI 荧光数据处理工具</h1>
+  <p>三维荧光光谱 · 荧光区域积分 · Chen et al. 2003</p>
+</header>
+
+<div class="container" id="app">
+
+<!-- ===== PASSWORD GATE ===== -->
+<div class="section active" id="sec-password">
+  <div class="password-wrap card fade-in">
+    <div class="lock-icon">&#128274;</div>
+    <h2>访问验证</h2>
+    <p class="text-muted" style="margin-top:6px">请输入访问密码以继续</p>
+    <input type="password" id="pw-input" placeholder="请输入密码" autocomplete="off">
+    <div id="pw-error" class="alert alert-error" style="display:none">密码错误，请重试</div>
+    <button class="btn btn-primary" style="width:100%" onclick="checkPassword()">进 入</button>
+  </div>
+</div>
+
+<!-- ===== MAIN APP (after auth) ===== -->
+<div id="main-app" style="display:none">
+
+<div class="stepper" id="stepper">
+  <div class="step-dot active" data-step="1">1</div>
+  <div class="step-dot" data-step="2">2</div>
+  <div class="step-dot" data-step="3">3</div>
+  <div class="step-dot" data-step="4">4</div>
+  <div class="step-dot" data-step="5">5</div>
+</div>
+<div class="step-labels">
+  <span>上传</span><span>配对</span><span>参数</span><span>计算</span><span>结果</span>
+</div>
+
+<!-- STEP 1: UPLOAD -->
+<div class="section active" id="sec-upload">
+  <div class="card fade-in">
+    <div class="step-title">第一步：上传 EEM 数据文件</div>
+    <div class="alert alert-info">
+      支持 Hitachi F-4600 FD3 格式 TXT 文件，请同时上传样品文件和空白文件。<br>
+      <small>文件名含 blank / 空白 / blk / kb 的自动识别为空白。</small>
+    </div>
+    <div class="file-drop" id="file-drop">
+      <input type="file" id="file-input" multiple accept=".txt,.TXT">
+      <div class="icon">&#128194;</div>
+      <p><strong>点击选择文件</strong> 或将文件拖放到此处</p>
+      <p style="font-size:.8rem;margin-top:4px">支持批量选择多个 .txt 文件</p>
+    </div>
+    <div class="file-list" id="file-list"></div>
+    <div class="flex-between mt-3">
+      <span class="text-muted" id="file-count">已加载 0 个文件</span>
+      <div>
+        <button class="btn btn-outline btn-sm" onclick="STATE.files=[];renderFileList()" style="margin-right:6px">清空</button>
+        <button class="btn btn-primary" id="btn-to-pair" disabled onclick="goStep(2)">下一步：配对 &#8594;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 2: PAIRING -->
+<div class="section" id="sec-pair">
+  <div class="card fade-in">
+    <div class="step-title">第二步：配对样品与空白</div>
+    <div class="alert alert-info">为每个样品指定对应的空白文件。系统已根据文件名尝试自动配对。</div>
+    <div id="pair-container"></div>
+    <div class="flex-between mt-3">
+      <button class="btn btn-outline" onclick="goStep(1)">&#8592; 返回</button>
+      <button class="btn btn-primary" id="btn-to-params" onclick="goStep(3)">下一步：参数设置 &#8594;</button>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 3: PARAMETERS -->
+<div class="section" id="sec-params">
+  <div class="card fade-in">
+    <div class="step-title">第三步：参数设置</div>
+    <div class="alert alert-info">以下为散射去除的默认参数（单位：nm），一般无需修改。</div>
+    <h3 style="font-size:.95rem;margin-bottom:10px">散射去除参数</h3>
+    <div class="param-grid">
+      <div><label>1st Rayleigh 下偏移 (nm)</label><input type="number" id="p-ray1-lo" value="20" min="0" max="100"></div>
+      <div><label>1st Rayleigh 上偏移 (nm)</label><input type="number" id="p-ray1-hi" value="20" min="0" max="100"></div>
+      <div><label>2nd Rayleigh 下偏移 (nm)</label><input type="number" id="p-ray2-lo" value="20" min="0" max="100"></div>
+      <div><label>2nd Rayleigh 上偏移 (nm)</label><input type="number" id="p-ray2-hi" value="20" min="0" max="100"></div>
+    </div>
+    <h3 style="font-size:.95rem;margin:18px 0 10px">FRI 区域边界</h3>
+    <div class="param-grid">
+      <div><label>Ex 分界 (nm)</label><input type="number" id="p-ex-cut" value="250"></div>
+      <div><label>Em 分界 1 (nm)</label><input type="number" id="p-em-cut1" value="330"></div>
+      <div><label>Em 分界 2 (nm)</label><input type="number" id="p-em-cut2" value="380"></div>
+    </div>
+    <div class="flex-between mt-3">
+      <button class="btn btn-outline" onclick="goStep(2)">&#8592; 返回</button>
+      <button class="btn btn-primary" onclick="runProcessing()">&#9654; 开始计算</button>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 4: PROCESSING -->
+<div class="section" id="sec-process">
+  <div class="card fade-in">
+    <div class="step-title">第四步：数据处理中</div>
+    <div class="progress-bar"><div class="fill" id="prog-fill" style="width:0%"></div></div>
+    <p class="text-center text-muted" id="prog-text">准备中...</p>
+    <div class="log-box" id="log-box"></div>
+  </div>
+</div>
+
+<!-- STEP 5: RESULTS -->
+<div class="section" id="sec-results">
+  <div class="card fade-in">
+    <div class="step-title">第五步：计算结果</div>
+    <div id="quality-alerts"></div>
+
+    <div class="tabs" id="result-tabs">
+      <button class="tab active" onclick="switchTab('tab-percent',this)">荧光百分比 P<sub>i</sub></button>
+      <button class="tab" onclick="switchTab('tab-volume',this)">荧光体积 &Phi;<sub>i</sub>&times;MF</button>
+      <button class="tab" onclick="switchTab('tab-mf',this)">乘积因子 MF</button>
+      <button class="tab" onclick="switchTab('tab-eem',this)">EEM 预览</button>
+    </div>
+
+    <div class="tab-content active" id="tab-percent">
+      <div class="result-table-wrap"><table class="result-table" id="tbl-percent"></table></div>
+    </div>
+    <div class="tab-content" id="tab-volume">
+      <div class="result-table-wrap"><table class="result-table" id="tbl-volume"></table></div>
+    </div>
+    <div class="tab-content" id="tab-mf">
+      <div class="result-table-wrap"><table class="result-table" id="tbl-mf"></table></div>
+    </div>
+    <div class="tab-content" id="tab-eem">
+      <div class="eem-preview-grid" id="eem-grid"></div>
+    </div>
+
+    <div class="flex-between mt-3">
+      <button class="btn btn-outline" onclick="resetAll()">&#8634; 重新开始</button>
+      <button class="btn btn-accent" onclick="downloadXLSX()">&#128229; 下载 XLSX</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main-app -->
+</div><!-- /container -->
+
+<footer>EEM-FRI Webapp &middot; Chen et al. (2003) &middot; 纯前端计算，数据不离开本机</footer>
+
+<script>
+"use strict";
+
+/* ================================================================
+   GLOBAL STATE
+   ================================================================ */
+const STATE = {
+  files: [],
+  pairs: [],
+  results: null,
+  correctedMatrices: []
+};
+
+const REGION_NAMES = [
+  "I - 类酪氨酸蛋白",
+  "II - 类色氨酸蛋白",
+  "III - 类富里酸",
+  "IV - 溶解性微生物代谢产物",
+  "V - 类腐殖酸"
+];
+const REGION_NAMES_SHORT = ["I","II","III","IV","V"];
+const REGION_NAMES_EN = [
+  "Region I (Tyrosine-like)",
+  "Region II (Tryptophan-like)",
+  "Region III (Fulvic acid-like)",
+  "Region IV (Microbial byproducts)",
+  "Region V (Humic acid-like)"
+];
+
+/* ================================================================
+   PASSWORD GATE
+   ================================================================ */
+function checkPassword(){
+  const v = document.getElementById("pw-input").value;
+  if(v === "\u7ECD\u5174"){
+    sessionStorage.setItem("eem-auth","1");
+    showApp();
+  } else {
+    document.getElementById("pw-error").style.display = "block";
+    document.getElementById("pw-input").value = "";
+    document.getElementById("pw-input").focus();
+  }
+}
+document.getElementById("pw-input").addEventListener("keydown", function(e){
+  if(e.key==="Enter") checkPassword();
+});
+
+function showApp(){
+  document.getElementById("sec-password").style.display = "none";
+  document.getElementById("main-app").style.display = "block";
+}
+if(sessionStorage.getItem("eem-auth")==="1") showApp();
+
+/* ================================================================
+   STEPPER NAVIGATION
+   ================================================================ */
+var SECTIONS = ["sec-upload","sec-pair","sec-params","sec-process","sec-results"];
+var currentStep = 1;
+
+function goStep(n){
+  currentStep = n;
+  for(var i=0;i<SECTIONS.length;i++){
+    var el = document.getElementById(SECTIONS[i]);
+    if(i===n-1){ el.classList.add("active"); } else { el.classList.remove("active"); }
+  }
+  var dots = document.querySelectorAll(".step-dot");
+  for(var d=0;d<dots.length;d++){
+    var s = +dots[d].getAttribute("data-step");
+    if(s===n) dots[d].className="step-dot active";
+    else if(s<n) dots[d].className="step-dot done";
+    else dots[d].className="step-dot";
+  }
+  if(n===2) buildPairingUI();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function resetAll(){
+  STATE.files = [];
+  STATE.pairs = [];
+  STATE.results = null;
+  STATE.correctedMatrices = [];
+  renderFileList();
+  goStep(1);
+}
+
+/* ================================================================
+   TAB SWITCHING
+   ================================================================ */
+function switchTab(tabId, btn){
+  var tabs = document.querySelectorAll("#sec-results .tab-content");
+  for(var i=0;i<tabs.length;i++) tabs[i].classList.remove("active");
+  document.getElementById(tabId).classList.add("active");
+  var btns = document.querySelectorAll("#result-tabs .tab");
+  for(var i=0;i<btns.length;i++) btns[i].classList.remove("active");
+  btn.classList.add("active");
+}
+
+/* ================================================================
+   FILE UPLOAD & PARSING
+   ================================================================ */
+var fileDrop = document.getElementById("file-drop");
+var fileInput = document.getElementById("file-input");
+
+fileDrop.addEventListener("dragover", function(e){e.preventDefault();fileDrop.classList.add("dragover")});
+fileDrop.addEventListener("dragleave", function(){fileDrop.classList.remove("dragover")});
+fileDrop.addEventListener("drop", function(e){
+  e.preventDefault(); fileDrop.classList.remove("dragover");
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener("change", function(e){ handleFiles(e.target.files); });
+
+function handleFiles(fileList){
+  for(var k=0;k<fileList.length;k++){
+    var f = fileList[k];
+    if(!f.name.toLowerCase().endsWith(".txt")) continue;
+    var dup = false;
+    for(var j=0;j<STATE.files.length;j++){
+      if(STATE.files[j].name===f.name){dup=true;break;}
+    }
+    if(dup) continue;
+    STATE.files.push({
+      name: f.name,
+      raw: f,
+      matrix: null,
+      exAxis: null,
+      emAxis: null,
+      type: guessType(f.name)
+    });
+  }
+  renderFileList();
+}
+
+function guessType(name){
+  var n = name.toLowerCase();
+  if(n.indexOf("blank")>=0||n.indexOf("\u7a7a\u767d")>=0||n.indexOf("blk")>=0||n.indexOf("kb")>=0) return "blank";
+  return "sample";
+}
+
+function setFileType(idx, val){
+  STATE.files[idx].type = val;
+  renderFileList();
+}
+function removeFile(idx){
+  STATE.files.splice(idx,1);
+  renderFileList();
+}
+
+function renderFileList(){
+  var c = document.getElementById("file-list");
+  c.innerHTML = "";
+  for(var i=0;i<STATE.files.length;i++){
+    var f = STATE.files[i];
+    var d = document.createElement("div");
+    d.className = "file-item";
+    var isSample = f.type==="sample";
+    d.innerHTML =
+      '<span class="name">'+escH(f.name)+'</span>'+
+      '<select onchange="setFileType('+i+',this.value)" style="width:auto;padding:4px 8px;font-size:.82rem">'+
+        '<option value="sample"'+(isSample?' selected':'')+'>&#128300; 样品</option>'+
+        '<option value="blank"'+(!isSample?' selected':'')+'>&#9898; 空白</option>'+
+      '</select>'+
+      '<span class="badge '+(isSample?'badge-sample':'badge-blank')+'">'+(isSample?'样品':'空白')+'</span>'+
+      '<span class="remove" onclick="removeFile('+i+')" title="移除">&#10005;</span>';
+    c.appendChild(d);
+  }
+  var nS=0,nB=0;
+  for(var i=0;i<STATE.files.length;i++){
+    if(STATE.files[i].type==="sample") nS++; else nB++;
+  }
+  document.getElementById("file-count").textContent =
+    "\u5DF2\u52A0\u8F7D "+STATE.files.length+" \u4E2A\u6587\u4EF6\uFF08"+nS+" \u6837\u54C1\uFF0C"+nB+" \u7A7A\u767D\uFF09";
+  document.getElementById("btn-to-pair").disabled = (STATE.files.length===0);
+}
+
+function escH(s){
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+/* Parse Hitachi F-4600 FD3 TXT */
+function parseTXT(file){
+  return file.raw.arrayBuffer().then(function(buf){
+    var text;
+    try { text = new TextDecoder("utf-8",{fatal:true}).decode(buf); }
+    catch(e){ text = new TextDecoder("gbk").decode(buf); }
+
+    var lines = text.split(/\r?\n/);
+    var dataStart = -1;
+
+    for(var i=0;i<lines.length;i++){
+      var lt = lines[i].trim();
+      if(lt.indexOf("Data Points")===0 || lt.indexOf("\u30C7\u30FC\u30BF\u30DD\u30A4\u30F3\u30C8")===0){
+        dataStart = i; break;
+      }
+    }
+    if(dataStart===-1){
+      for(var i=2;i<lines.length;i++){
+        if(/^\s*[\d.]+[\s,\t]+[\d.]+/.test(lines[i]) && /^\s*[\d.]+[\s,\t]+[\d.]+/.test(lines[i-1])){
+          var prevParts = lines[i-2].trim().split(/[\s,\t]+/);
+          var allNum = true;
+          for(var p=0;p<prevParts.length;p++){
+            if(prevParts[p]!=="" && isNaN(+prevParts[p])){allNum=false;break;}
+          }
+          if(allNum && prevParts.length>5){
+            dataStart = i-3; break;
+          }
+        }
+      }
+    }
+    if(dataStart===-1) throw new Error("\u65E0\u6CD5\u627E\u5230\u6570\u636E\u8D77\u59CB\u884C: "+file.name);
+
+    var hdrIdx = dataStart+1;
+    var headerLine = lines[hdrIdx];
+    if(!headerLine||headerLine.trim()==="") headerLine = lines[hdrIdx+1];
+
+    var exParts = headerLine.trim().split(/[\s,\t]+/);
+    var exVals = [];
+    for(var p=0;p<exParts.length;p++){
+      var v = parseFloat(exParts[p]);
+      if(!isNaN(v)) exVals.push(v);
+    }
+    if(exVals.length<2) throw new Error("Ex \u6CE2\u957F\u89E3\u6790\u5931\u8D25: "+file.name);
+
+    var emAxis = [];
+    var matrix = [];
+    for(var i=hdrIdx+1;i<lines.length;i++){
+      var ln = lines[i].trim();
+      if(!ln) break;
+      if(ln.charAt(0)==="#") break;
+      var parts = ln.split(/[\s,\t]+/);
+      var row = [];
+      var em = parseFloat(parts[0]);
+      if(isNaN(em)) continue;
+      for(var p=1;p<parts.length;p++) row.push(parseFloat(parts[p])||0);
+      if(row.length===0) continue;
+      emAxis.push(em);
+      matrix.push(row);
+    }
+    if(matrix.length===0) throw new Error("\u6570\u636E\u77E9\u9635\u4E3A\u7A7A: "+file.name);
+
+    for(var r=0;r<matrix.length;r++){
+      while(matrix[r].length<exVals.length) matrix[r].push(0);
+    }
+
+    file.exAxis = exVals;
+    file.emAxis = emAxis;
+    file.matrix = matrix;
+    return file;
+  });
+}
+
+/* ================================================================
+   PAIRING UI
+   ================================================================ */
+function buildPairingUI(){
+  var samples=[], blanks=[];
+  for(var i=0;i<STATE.files.length;i++){
+    if(STATE.files[i].type==="sample") samples.push(STATE.files[i]);
+    else blanks.push(STATE.files[i]);
+  }
+  var c = document.getElementById("pair-container");
+  c.innerHTML = "";
+
+  if(samples.length===0){
+    c.innerHTML='<div class="alert alert-warn">\u672A\u53D1\u73B0\u6837\u54C1\u6587\u4EF6\uFF0C\u8BF7\u8FD4\u56DE\u4E0A\u4E00\u6B65\u6807\u8BB0\u6837\u54C1\u3002</div>';
+    return;
+  }
+  if(blanks.length===0){
+    c.innerHTML='<div class="alert alert-warn">\u672A\u53D1\u73B0\u7A7A\u767D\u6587\u4EF6\uFF0C\u8BF7\u8FD4\u56DE\u4E0A\u4E00\u6B65\u6807\u8BB0\u7A7A\u767D\u3002</div>';
+    return;
+  }
+
+  STATE.pairs = [];
+  for(var si=0;si<samples.length;si++){
+    var s = samples[si];
+    var sIdx = STATE.files.indexOf(s);
+    var bestBI = 0;
+
+    STATE.pairs.push({sampleIdx: sIdx, blankIdx: STATE.files.indexOf(blanks[bestBI])});
+
+    var row = document.createElement("div");
+    row.className = "pair-row";
+    var opts = "";
+    for(var bi=0;bi<blanks.length;bi++){
+      opts += '<option value="'+bi+'"'+(bi===bestBI?' selected':'')+'>'+escH(blanks[bi].name)+'</option>';
+    }
+    row.innerHTML =
+      '<div><label>\u6837\u54C1</label><div style="font-weight:500;font-size:.9rem">'+escH(s.name)+'</div></div>'+
+      '<div class="pair-arrow">&rarr;</div>'+
+      '<div><label>\u7A7A\u767D</label>'+
+        '<select onchange="updatePair('+si+',+this.value)" style="font-size:.88rem">'+opts+'</select>'+
+      '</div>';
+    c.appendChild(row);
+  }
+}
+
+function updatePair(pairIdx, blankLocalIdx){
+  var blanks=[];
+  for(var i=0;i<STATE.files.length;i++){
+    if(STATE.files[i].type==="blank") blanks.push(STATE.files[i]);
+  }
+  if(blankLocalIdx>=0 && blankLocalIdx<blanks.length){
+    STATE.pairs[pairIdx].blankIdx = STATE.files.indexOf(blanks[blankLocalIdx]);
+  }
+}
+
+/* ================================================================
+   PROCESSING PIPELINE
+   ================================================================ */
+function runProcessing(){
+  goStep(4);
+  var log = document.getElementById("log-box");
+  var progFill = document.getElementById("prog-fill");
+  var progText = document.getElementById("prog-text");
+  log.innerHTML = "";
+
+  function addLog(msg, cls){
+    var d = document.createElement("div");
+    if(cls) d.className = cls;
+    d.textContent = msg;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+  function setProgress(pct, txt){
+    progFill.style.width = pct+"%";
+    progText.textContent = txt;
+  }
+
+  var params = {
+    ray1Lo: +document.getElementById("p-ray1-lo").value || 20,
+    ray1Hi: +document.getElementById("p-ray1-hi").value || 20,
+    ray2Lo: +document.getElementById("p-ray2-lo").value || 20,
+    ray2Hi: +document.getElementById("p-ray2-hi").value || 20,
+    exCut:  +document.getElementById("p-ex-cut").value  || 250,
+    emCut1: +document.getElementById("p-em-cut1").value || 330,
+    emCut2: +document.getElementById("p-em-cut2").value || 380
+  };
+
+  setProgress(2, "\u6B63\u5728\u89E3\u6790\u6587\u4EF6...");
+
+  var parsePromises = [];
+  for(var i=0;i<STATE.files.length;i++){
+    parsePromises.push(parseTXT(STATE.files[i]));
+  }
+
+  Promise.all(parsePromises).then(function(){
+    for(var i=0;i<STATE.files.length;i++){
+      var f = STATE.files[i];
+      addLog("\u2713 \u89E3\u6790\u6210\u529F: "+f.name+"  (Ex: "+f.exAxis.length+"\u5217, Em: "+f.emAxis.length+"\u884C)","ok");
+    }
+
+    setProgress(12, "\u68C0\u67E5\u6570\u636E\u7EF4\u5EA6...");
+    for(var i=0;i<STATE.files.length;i++){
+      var f = STATE.files[i];
+      if(f.exAxis.length!==47)
+        addLog("\u26A0 "+f.name+": Ex \u5217\u6570="+f.exAxis.length+" (\u671F\u671B47\u5217: 220-450nm)","warn");
+      if(f.emAxis.length!==241)
+        addLog("\u26A0 "+f.name+": Em \u884C\u6570="+f.emAxis.length+" (\u671F\u671B241\u884C: 260-500nm)","warn");
+      if(Math.abs(f.exAxis[0]-220)>0.5)
+        addLog("\u26A0 "+f.name+": Ex \u8D77\u59CB="+f.exAxis[0]+"nm (\u671F\u671B220nm)","warn");
+    }
+
+    var results = [];
+    STATE.correctedMatrices = [];
+    var totalPairs = STATE.pairs.length;
+
+    for(var pi=0;pi<totalPairs;pi++){
+      var pair = STATE.pairs[pi];
+      var sample = STATE.files[pair.sampleIdx];
+      var blank  = STATE.files[pair.blankIdx];
+      var pct0 = 15 + (pi/totalPairs)*75;
+      setProgress(pct0, "\u5904\u7406 "+sample.name+" ("+(pi+1)+"/"+totalPairs+")...");
+      addLog("\n\u2500\u2500\u2500 \u5904\u7406: "+sample.name+" \u2500\u2500\u2500");
+
+      if(sample.exAxis.length!==blank.exAxis.length || sample.emAxis.length!==blank.emAxis.length){
+        addLog("\u2717 \u7EF4\u5EA6\u4E0D\u5339\u914D: \u6837\u54C1("+sample.exAxis.length+"\u00D7"+sample.emAxis.length+") vs \u7A7A\u767D("+blank.exAxis.length+"\u00D7"+blank.emAxis.length+")","err");
+        continue;
+      }
+
+      var exAxis = sample.exAxis;
+      var emAxis = sample.emAxis;
+      var nEm = emAxis.length;
+      var nEx = exAxis.length;
+      var dEm = (nEm>1) ? (emAxis[1]-emAxis[0]) : 1;
+      var dEx = (nEx>1) ? (exAxis[1]-exAxis[0]) : 1;
+
+      /* ---- Blank subtraction ---- */
+      var corrected = new Array(nEm);
+      for(var i=0;i<nEm;i++){
+        corrected[i] = new Float64Array(nEx);
+        for(var j=0;j<nEx;j++){
+          var sv = (sample.matrix[i]&&sample.matrix[i][j])||0;
+          var bv = (blank.matrix[i]&&blank.matrix[i][j])||0;
+          corrected[i][j] = Math.max(sv - bv, 0);
+        }
+      }
+      addLog("  \u2713 \u7A7A\u767D\u6263\u9664\u5B8C\u6210","ok");
+
+      /* ---- Raman normalization ---- */
+      var ex350idx = -1;
+      for(var j=0;j<nEx;j++){
+        if(Math.abs(exAxis[j]-350)<0.5){ex350idx=j;break;}
+      }
+      if(ex350idx===-1){
+        addLog("  \u2717 \u7A7A\u767D\u4E2D\u672A\u627E\u5230 Ex=350nm \u5217","err");
+        continue;
+      }
+
+      var ramanArea = 0;
+      var emLoR=371, emHiR=428;
+      for(var i=0;i<nEm;i++){
+        var em = emAxis[i];
+        if(em<emLoR || em>emHiR) continue;
+        var val = (blank.matrix[i]&&blank.matrix[i][ex350idx])||0;
+        var w = 1.0;
+        if(Math.abs(em-emLoR)<0.5 || Math.abs(em-emHiR)<0.5) w = 0.5;
+        ramanArea += val * w * dEm;
+      }
+
+      if(ramanArea<=0){
+        addLog("  \u26A0 Raman \u9762\u79EF \u2264 0\uFF0C\u8DF3\u8FC7\u5F52\u4E00\u5316","warn");
+      } else {
+        addLog("  \u2713 Raman \u9762\u79EF Q = "+ramanArea.toFixed(2),"ok");
+        for(var i=0;i<nEm;i++){
+          for(var j=0;j<nEx;j++){
+            corrected[i][j] /= ramanArea;
+          }
+        }
+        addLog("  \u2713 Raman \u5F52\u4E00\u5316\u5B8C\u6210 (R.U.)","ok");
+      }
+
+      /* ---- Scatter removal ---- */
+      var scatterCount = 0;
+      for(var i=0;i<nEm;i++){
+        for(var j=0;j<nEx;j++){
+          var em = emAxis[i], ex = exAxis[j];
+          if(em < ex - params.ray1Lo){ corrected[i][j]=NaN; scatterCount++; continue; }
+          if(em < ex + params.ray1Hi){ corrected[i][j]=0; continue; }
+          if(em > 2*ex + params.ray2Hi){ corrected[i][j]=NaN; scatterCount++; continue; }
+          if(em > 2*ex - params.ray2Lo){ corrected[i][j]=0; continue; }
+        }
+      }
+      addLog("  \u2713 \u6563\u5C04\u53BB\u9664\u5B8C\u6210 ("+scatterCount+" \u4E2A NaN \u70B9)","ok");
+
+      STATE.correctedMatrices.push({name:sample.name, matrix:corrected, exAxis:exAxis, emAxis:emAxis});
+
+      /* ---- FRI 5-Region Integration ---- */
+      var exCut = params.exCut, emCut1 = params.emCut1, emCut2 = params.emCut2;
+
+      var regionTests = [
+        function(em,ex){return ex<exCut && em<emCut1;},
+        function(em,ex){return ex<exCut && em>=emCut1 && em<=emCut2;},
+        function(em,ex){return ex<exCut && em>emCut2;},
+        function(em,ex){return ex>=exCut && em<=emCut2;},
+        function(em,ex){return ex>=exCut && em>emCut2;}
+      ];
+
+      function integrate2D(test){
+        var total = 0;
+        for(var ii=0;ii<nEm;ii++){
+          for(var jj=0;jj<nEx;jj++){
+            if(!test(emAxis[ii], exAxis[jj])) continue;
+            var v = corrected[ii][jj];
+            if(isNaN(v)) continue;
+            var wEm=1.0, wEx=1.0;
+            if(ii===0||ii===nEm-1) wEm=0.5;
+            if(jj===0||jj===nEx-1) wEx=0.5;
+            total += v * wEm * wEx * dEm * dEx;
+          }
+        }
+        return total;
+      }
+
+      function countCells(test){
+        var cnt=0;
+        for(var ii=0;ii<nEm;ii++){
+          for(var jj=0;jj<nEx;jj++){
+            if(test(emAxis[ii], exAxis[jj])) cnt++;
+          }
+        }
+        return cnt;
+      }
+
+      var totalCellCount = nEm * nEx;
+      var phi=[], regionCellCount=[];
+      for(var r=0;r<5;r++){
+        phi[r] = integrate2D(regionTests[r]);
+        regionCellCount[r] = countCells(regionTests[r]);
+      }
+
+      var MF = [];
+      for(var r=0;r<5;r++) MF[r] = totalCellCount / regionCellCount[r];
+
+      var phiMF = [];
+      var sumPhiMF = 0;
+      for(var r=0;r<5;r++){
+        phiMF[r] = phi[r] * MF[r];
+        sumPhiMF += phiMF[r];
+      }
+
+      var P = [];
+      for(var r=0;r<5;r++) P[r] = (sumPhiMF>0) ? phiMF[r]/sumPhiMF : 0;
+
+      addLog("  \u2713 FRI \u79EF\u5206\u5B8C\u6210: P = ["+P.map(function(v){return (v*100).toFixed(2)+"%"}).join(", ")+"]","ok");
+
+      var pSum = 0;
+      for(var r=0;r<5;r++) pSum+=P[r];
+      if(Math.abs(pSum-1.0)>0.001){
+        addLog("  \u26A0 P \u603B\u548C = "+pSum.toFixed(6)+" (\u504F\u79BB 1.0)","warn");
+      }
+
+      results.push({
+        name: sample.name,
+        P:P, phi:phi, MF:MF, phiMF:phiMF,
+        ramanArea:ramanArea, scatterCount:scatterCount, pSum:pSum
+      });
+    }
+
+    STATE.results = results;
+
+    /* Validate MF */
+    setProgress(95, "\u8D28\u91CF\u68C0\u9A8C...");
+    var expectedMF = [17.69, 24.77, 10.32, 4.42, 1.72];
+    if(results.length>0){
+      var mf0 = results[0].MF;
+      var match = true;
+      for(var r=0;r<5;r++){ if(Math.abs(mf0[r]-expectedMF[r])>=0.1){match=false;break;} }
+      if(match){
+        addLog("\n\u2713 MF \u503C\u4E0E\u6807\u51C6\u8303\u56F4\u4E00\u81F4","ok");
+      } else {
+        addLog("\n\u26A0 MF \u503C ["+mf0.map(function(v){return v.toFixed(2)}).join(", ")+"] \u4E0E\u6807\u51C6 ["+expectedMF.join(", ")+"] \u4E0D\u4E00\u81F4\uFF08\u53EF\u80FD\u662F\u6CE2\u957F\u8303\u56F4\u4E0D\u540C\uFF09","warn");
+      }
+    }
+
+    setProgress(100, "\u5904\u7406\u5B8C\u6210\uFF01");
+    addLog("\n\u2550\u2550 \u6240\u6709\u6837\u54C1\u5904\u7406\u5B8C\u6210 \u2550\u2550","ok");
+
+    setTimeout(function(){
+      goStep(5);
+      renderResults();
+      renderEEMPreviews();
+    }, 500);
+
+  }).catch(function(err){
+    addLog("\n\u2717 \u9519\u8BEF: "+err.message,"err");
+    setProgress(0, "\u5904\u7406\u51FA\u9519");
+  });
+}
+
+/* ================================================================
+   RESULTS RENDERING
+   ================================================================ */
+function renderResults(){
+  var res = STATE.results;
+  if(!res||res.length===0) return;
+
+  /* Quality alerts */
+  var qa = document.getElementById("quality-alerts");
+  qa.innerHTML = "";
+  var allOk = true;
+  for(var i=0;i<res.length;i++){
+    if(Math.abs(res[i].pSum-1.0)>0.001){
+      qa.innerHTML+='<div class="alert alert-warn">\u26A0 '+escH(res[i].name)+': P \u603B\u548C = '+res[i].pSum.toFixed(6)+'</div>';
+      allOk=false;
+    }
+  }
+  if(allOk) qa.innerHTML='<div class="alert alert-ok">\u2713 \u6240\u6709\u6837\u54C1\u901A\u8FC7\u8D28\u91CF\u68C0\u9A8C\uFF0CP \u603B\u548C = 100%</div>';
+
+  /* Percent table */
+  var t1 = document.getElementById("tbl-percent");
+  var h = "<tr><th>\u6837\u54C1</th>";
+  for(var r=0;r<5;r++) h+="<th>"+REGION_NAMES[r]+"</th>";
+  h+="<th>\u603B\u548C</th></tr>";
+  for(var i=0;i<res.length;i++){
+    h+="<tr><td>"+escH(res[i].name)+"</td>";
+    for(var r=0;r<5;r++) h+="<td>"+(res[i].P[r]*100).toFixed(2)+"%</td>";
+    h+="<td>"+(res[i].pSum*100).toFixed(2)+"%</td></tr>";
+  }
+  t1.innerHTML=h;
+
+  /* Volume table */
+  var t2 = document.getElementById("tbl-volume");
+  h = "<tr><th>\u6837\u54C1</th>";
+  for(var r=0;r<5;r++) h+="<th>"+REGION_NAMES[r]+"</th>";
+  h+="<th>\u603B\u8BA1</th></tr>";
+  for(var i=0;i<res.length;i++){
+    var sum=0;
+    for(var r=0;r<5;r++) sum+=res[i].phiMF[r];
+    h+="<tr><td>"+escH(res[i].name)+"</td>";
+    for(var r=0;r<5;r++) h+="<td>"+res[i].phiMF[r].toFixed(4)+"</td>";
+    h+="<td>"+sum.toFixed(4)+"</td></tr>";
+  }
+  t2.innerHTML=h;
+
+  /* MF table */
+  var t3 = document.getElementById("tbl-mf");
+  var expectedMF=[17.69,24.77,10.32,4.42,1.72];
+  h="<tr><th>\u533A\u57DF</th><th>\u8BA1\u7B97\u503C</th><th>\u6807\u51C6\u503C (220-450 / 260-500)</th><th>\u72B6\u6001</th></tr>";
+  if(res.length>0){
+    var mf=res[0].MF;
+    for(var r=0;r<5;r++){
+      var ok=Math.abs(mf[r]-expectedMF[r])<0.1;
+      h+="<tr><td>"+REGION_NAMES[r]+"</td><td>"+mf[r].toFixed(4)+"</td><td>"+expectedMF[r]+"</td>"+
+        '<td style="color:'+(ok?"#16a34a":"#d97706")+';">'+(ok?"\u2713 \u4E00\u81F4":"\u26A0 \u504F\u5DEE")+"</td></tr>";
+    }
+  }
+  t3.innerHTML=h;
+}
+
+/* ================================================================
+   EEM CONTOUR PREVIEW (Canvas)
+   ================================================================ */
+function renderEEMPreviews(){
+  var grid = document.getElementById("eem-grid");
+  grid.innerHTML = "";
+  if(!STATE.correctedMatrices||STATE.correctedMatrices.length===0) return;
+
+  for(var k=0;k<STATE.correctedMatrices.length;k++){
+    var d = STATE.correctedMatrices[k];
+    var card = document.createElement("div");
+    card.className = "eem-card";
+    var cvs = document.createElement("canvas");
+    cvs.width = 400; cvs.height = 320;
+    card.appendChild(cvs);
+    var lbl = document.createElement("div");
+    lbl.className = "eem-label";
+    lbl.textContent = d.name;
+    card.appendChild(lbl);
+    grid.appendChild(card);
+    drawEEM(cvs, d.matrix, d.exAxis, d.emAxis);
+  }
+}
+
+function drawEEM(canvas, matrix, exAxis, emAxis){
+  var ctx = canvas.getContext("2d");
+  var W = canvas.width, H = canvas.height;
+  var pad = {l:50,r:20,t:20,b:40};
+  var pw = W-pad.l-pad.r, ph = H-pad.t-pad.b;
+
+  ctx.fillStyle="#fff";
+  ctx.fillRect(0,0,W,H);
+
+  var nEm=emAxis.length, nEx=exAxis.length;
+
+  /* Find valid max for color scaling */
+  var vmax=0;
+  for(var i=0;i<nEm;i++){
+    for(var j=0;j<nEx;j++){
+      var v=matrix[i][j];
+      if(!isNaN(v)&&v>vmax) vmax=v;
+    }
+  }
+  if(vmax===0) vmax=1;
+
+  /* Draw heatmap */
+  var imgData = ctx.createImageData(nEx, nEm);
+  for(var i=0;i<nEm;i++){
+    for(var j=0;j<nEx;j++){
+      var v = matrix[i][j];
+      var idx = (i*nEx+j)*4;
+      if(isNaN(v)){
+        imgData.data[idx]=240;imgData.data[idx+1]=240;imgData.data[idx+2]=240;imgData.data[idx+3]=255;
+      } else {
+        var t = Math.min(v/vmax, 1);
+        var rgb = viridis(t);
+        imgData.data[idx]=rgb[0];imgData.data[idx+1]=rgb[1];imgData.data[idx+2]=rgb[2];imgData.data[idx+3]=255;
+      }
+    }
+  }
+
+  var tmpCvs = document.createElement("canvas");
+  tmpCvs.width=nEx;tmpCvs.height=nEm;
+  tmpCvs.getContext("2d").putImageData(imgData,0,0);
+
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(tmpCvs, pad.l, pad.t, pw, ph);
+
+  /* Axes */
+  ctx.strokeStyle="#333";ctx.lineWidth=1;
+  ctx.strokeRect(pad.l,pad.t,pw,ph);
+
+  ctx.fillStyle="#333";ctx.font="11px sans-serif";ctx.textAlign="center";
+  var exMin=exAxis[0],exMax=exAxis[nEx-1];
+  for(var ex=Math.ceil(exMin/50)*50;ex<=exMax;ex+=50){
+    var x=pad.l+(ex-exMin)/(exMax-exMin)*pw;
+    ctx.fillText(ex, x, H-pad.b+14);
+    ctx.beginPath();ctx.moveTo(x,pad.t+ph);ctx.lineTo(x,pad.t+ph+4);ctx.stroke();
+  }
+  ctx.fillText("Ex (nm)", pad.l+pw/2, H-4);
+
+  ctx.textAlign="right";ctx.textBaseline="middle";
+  var emMin=emAxis[0],emMax=emAxis[nEm-1];
+  for(var em=Math.ceil(emMin/50)*50;em<=emMax;em+=50){
+    var y=pad.t+(em-emMin)/(emMax-emMin)*ph;
+    ctx.fillText(em, pad.l-6, y);
+    ctx.beginPath();ctx.moveTo(pad.l-4,y);ctx.lineTo(pad.l,y);ctx.stroke();
+  }
+  ctx.save();ctx.translate(12,pad.t+ph/2);ctx.rotate(-Math.PI/2);
+  ctx.textAlign="center";ctx.fillText("Em (nm)",0,0);ctx.restore();
+}
+
+function viridis(t){
+  t=Math.max(0,Math.min(1,t));
+  var c=[
+    [68,1,84],[72,35,116],[64,67,135],[52,94,141],[41,120,142],
+    [32,144,140],[34,167,132],[68,190,112],[121,209,81],[189,222,38],[253,231,37]
+  ];
+  var idx=t*(c.length-1);
+  var lo=Math.floor(idx), hi=Math.min(lo+1,c.length-1);
+  var f=idx-lo;
+  return [
+    Math.round(c[lo][0]+(c[hi][0]-c[lo][0])*f),
+    Math.round(c[lo][1]+(c[hi][1]-c[lo][1])*f),
+    Math.round(c[lo][2]+(c[hi][2]-c[lo][2])*f)
+  ];
+}
+
+/* ================================================================
+   XLSX EXPORT
+   ================================================================ */
+function downloadXLSX(){
+  var res = STATE.results;
+  if(!res||res.length===0) return;
+
+  var wb = XLSX.utils.book_new();
+
+  /* Sheet 1: percent fluorescence response */
+  var s1 = [["Sample"].concat(REGION_NAMES_EN).concat(["Sum (%)"])];
+  for(var i=0;i<res.length;i++){
+    var row = [res[i].name];
+    for(var r=0;r<5;r++) row.push(+(res[i].P[r]*100).toFixed(4));
+    row.push(+(res[i].pSum*100).toFixed(4));
+    s1.push(row);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s1), "percent fluorescence response");
+
+  /* Sheet 2: volume (Φ×MF) */
+  var s2 = [["Sample"].concat(REGION_NAMES_EN).concat(["Total \u03A6\u00D7MF"])];
+  for(var i=0;i<res.length;i++){
+    var row=[res[i].name], sum=0;
+    for(var r=0;r<5;r++){row.push(+res[i].phiMF[r].toFixed(6));sum+=res[i].phiMF[r];}
+    row.push(+sum.toFixed(6));
+    s2.push(row);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s2), "volume");
+
+  /* Sheet 3: multiplication factor */
+  var s3 = [["Region","Calculated MF","Expected MF (standard range)"]];
+  var expectedMF=[17.69,24.77,10.32,4.42,1.72];
+  var mf=res[0].MF;
+  for(var r=0;r<5;r++){
+    s3.push([REGION_NAMES_EN[r], +mf[r].toFixed(4), expectedMF[r]]);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s3), "multiplication factor");
+
+  XLSX.writeFile(wb, "EEM_FRI_Results.xlsx");
+}
+
+</script>
+</body>
+</html>
